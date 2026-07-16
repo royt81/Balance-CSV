@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Balance CSV Reporter</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231e3a5f'/%3E%3Crect x='6' y='8' width='20' height='3' rx='1' fill='%234a9fd4'/%3E%3Crect x='6' y='14' width='12' height='2' rx='1' fill='white' opacity='.8'/%3E%3Crect x='6' y='19' width='14' height='2' rx='1' fill='white' opacity='.6'/%3E%3Crect x='6' y='24' width='9' height='2' rx='1' fill='%23e74c3c' opacity='.9'/%3E%3C/svg%3E" />
+  <script src="xlsx.full.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+    header{background:linear-gradient(135deg,#1e3a5f 0%,#2d6a9f 100%);color:white;padding:20px 32px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+    header h1{font-size:1.4rem;font-weight:600}
+    header p{font-size:.85rem;opacity:.75;margin-top:2px}
+    main{max-width:1400px;margin:0 auto;padding:28px 24px}
+    #dropzone{border:2px dashed #a0b4cc;border-radius:12px;background:white;padding:48px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:28px}
+    #dropzone.drag-over{border-color:#2d6a9f;background:#eef4fb}
+    #dropzone svg{width:48px;height:48px;color:#7aa5c9;margin-bottom:12px}
+    #dropzone p.main{font-size:1rem;font-weight:500;color:#1e3a5f}
+    #dropzone p.sub{font-size:.83rem;color:#7a8898;margin-top:6px}
+    #fileInput{display:none}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:7px;border:none;font-size:.875rem;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s}
+    .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}
+    .btn-primary{background:#2d6a9f;color:white}
+    .btn-green{background:#217a3c;color:white}
+    .btn-sm{padding:5px 12px;font-size:.8rem}
+    #toolbar{display:none;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+    .file-badge{background:#e8f0fe;color:#1e3a5f;padding:4px 12px;border-radius:20px;font-size:.83rem;font-weight:500}
+    .spacer{flex:1}
+    .tabs{display:none;border-bottom:2px solid #dce3eb;margin-bottom:0}
+    .tab{padding:10px 22px;font-size:.88rem;font-weight:500;cursor:pointer;border:none;background:none;color:#7a8898;border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .15s}
+    .tab.active{color:#2d6a9f;border-bottom-color:#2d6a9f}
+    .panel{display:none}.panel.active{display:block}
+    .card{background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;margin-top:16px}
+    .card-header{padding:14px 20px;background:#f7f9fb;border-bottom:1px solid #e8edf2;font-weight:600;font-size:.9rem;color:#1e3a5f;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    #kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px;margin-top:0}
+    .kpi{background:white;border-radius:10px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .kpi .label{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#7a8898}
+    .kpi .value{font-size:1.4rem;font-weight:700;margin-top:4px}
+    .kpi.debt .value{color:#c0392b}.kpi.ok .value{color:#27ae60}.kpi.neutral .value{color:#2d6a9f}.kpi.credit-val .value{color:#8e44ad}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:.83rem}
+    thead th{background:#1e3a5f;color:white;padding:9px 12px;text-align:left;font-weight:500;white-space:nowrap;position:sticky;top:0}
+    thead th.num{text-align:right}
+    thead th.sortable{cursor:pointer;-webkit-user-select:none;user-select:none}
+    thead th.sortable:hover{background:#2a4f7a}
+    .sort-arrow{margin-left:4px;opacity:.4;font-size:.75em}
+    .sort-arrow.active{opacity:1}
+    tbody tr:nth-child(even){background:#f7f9fb}
+    tbody tr:hover{background:#eef4fb}
+    tbody td{padding:7px 12px;border-bottom:1px solid #e8edf2;white-space:nowrap}
+    tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+    tbody td.wrap{white-space:normal;min-width:140px}
+    td.td-address{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    tfoot td{padding:9px 12px;font-weight:700;background:#e8f0fe;color:#1e3a5f;border-top:2px solid #2d6a9f}
+    tfoot td.num{text-align:right}
+    .badge-debt{color:#c0392b;font-weight:600}
+    .badge-credit{color:#8e44ad;font-weight:600}
+    .badge-ok{color:#7a8898}
+    .iban{font-family:monospace;font-size:.82rem;letter-spacing:.03em}
+    #txFilter{padding:7px 12px;border:1px solid #dce3eb;border-radius:6px;font-size:.85rem;width:200px}
+    #txFilter:focus{outline:none;border-color:#2d6a9f}
+    #contractFilter{padding:7px 10px;border:1px solid #dce3eb;border-radius:6px;font-size:.85rem}
+    .flex-gap{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .no-extra{display:none}
+    .header-icon{width:36px;height:36px;flex-shrink:0}
+    .badge-row{background:#e8f5e9;color:#217a3c}
+    .badge-mode{background:#fef3cd;color:#856404}
+    .icon-sm{width:15px;height:15px}
+    #kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px;margin-top:16px}
+  </style>
+</head>
+<body>
+<header>
+  <svg viewBox="0 0 32 32" class="header-icon">
+    <rect width="32" height="32" rx="6" fill="white" opacity=".2"/>
+    <rect x="6" y="8" width="20" height="3" rx="1" fill="#4a9fd4"/>
+    <rect x="6" y="14" width="12" height="2" rx="1" fill="white" opacity=".8"/>
+    <rect x="6" y="19" width="14" height="2" rx="1" fill="white" opacity=".6"/>
+    <rect x="6" y="24" width="9" height="2" rx="1" fill="#e74c3c" opacity=".9"/>
+  </svg>
+  <div>
+    <h1>Balance CSV Reporter</h1>
+    <p>Upload a Billogram balance CSV to generate contract debt reports</p>
+  </div>
+</header>
+<main>
+  <div id="dropzone">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+    </svg>
+    <p class="main">Drop your CSV file here, or click to browse</p>
+    <p class="sub">Supports semicolon-delimited Billogram balance exports</p>
+  </div>
+  <input type="file" id="fileInput" accept=".csv" />
+
+  <div id="toolbar">
+    <span class="file-badge" id="fileBadge"></span>
+    <span class="file-badge badge-row" id="rowBadge"></span>
+    <span class="file-badge badge-mode" id="modeBadge"></span>
+    <div class="spacer"></div>
+    <button type="button" class="btn btn-green" id="exportBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-sm">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Export to Excel
+    </button>
+    <button type="button" class="btn btn-primary btn-sm" id="resetBtn">Load another file</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button type="button" class="tab active" data-tab="summary">Debt Summary</button>
+    <button type="button" class="tab" data-tab="transactions">All Transactions</button>
+  </div>
+
+  <!-- Summary Panel -->
+  <div class="panel active" id="panel-summary">
+    <div id="kpis"></div>
+    <div class="card">
+      <div class="card-header"><span>Contract Overview</span></div>
+      <div class="table-wrap"><table id="summaryTable"></table></div>
+    </div>
+  </div>
+
+  <!-- Transactions Panel -->
+  <div class="panel" id="panel-transactions">
+    <div class="card">
+      <div class="card-header">
+        <span>All Transactions</span>
+        <div class="flex-gap">
+          <select id="contractFilter"><option value="">All contracts</option></select>
+          <input id="txFilter" type="text" placeholder="Search..." />
+        </div>
+      </div>
+      <div class="table-wrap"><table id="txTable"></table></div>
+    </div>
+  </div>
+</main>
+
+<script src="csv-balance-reporter.js"></script>
+</body>
+</html>
