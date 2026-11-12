@@ -68,6 +68,14 @@
     .badge-mode{background:#fef3cd;color:#856404}
     .icon-sm{width:15px;height:15px}
     #kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px;margin-top:16px}
+    #billingKpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:16px;margin-top:16px}
+    .sub-id{font-size:.72rem;color:#9aa7b8;margin-top:1px}
+    td.trail{white-space:normal;min-width:260px;font-size:.78rem;color:#4a5568}
+    .st-paid{color:#27ae60;font-weight:600}
+    .st-open{color:#c0392b;font-weight:600}
+    .st-warn{color:#e67e22;font-weight:600}
+    .st-credit{color:#8e44ad;font-weight:600}
+    .st-muted{color:#7a8898;font-weight:600}
   </style>
 </head>
 <body>
@@ -111,6 +119,7 @@
 
   <div class="tabs" id="tabs">
     <button type="button" class="tab active" data-tab="summary">Debt Summary</button>
+    <button type="button" class="tab" data-tab="billing" id="billingTab" style="display:none">Payment History</button>
     <button type="button" class="tab" data-tab="transactions">All Transactions</button>
   </div>
 
@@ -120,6 +129,15 @@
     <div class="card">
       <div class="card-header"><span>Contract Overview</span></div>
       <div class="table-wrap"><table id="summaryTable"></table></div>
+    </div>
+  </div>
+
+  <!-- Payment History Panel (single-contract CSVs only) -->
+  <div class="panel" id="panel-billing">
+    <div id="billingKpis"></div>
+    <div class="card">
+      <div class="card-header"><span id="billingHeader">Payment History</span></div>
+      <div class="table-wrap"><table id="billingTable"></table></div>
     </div>
   </div>
 
