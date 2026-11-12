@@ -91,8 +91,14 @@ function parseCSV(text) {
   for (const r of parsedData) {
     if (!map[r.contract]) {
       map[r.contract] = { contract: r.contract, debit: 0, credit: 0,
-        name: '', meter: '', iban: '', address: '', malo: '' };
+        name: '', meter: '', iban: '', address: '', malo: '',
+        firstKey: '', firstDate: '', lastKey: '', lastDate: '', periods: new Set() };
     }
+    const g = map[r.contract], k = dateKey(r.sendDate);
+    if (k && (!g.firstKey || k < g.firstKey)) { g.firstKey = k; g.firstDate = r.sendDate; }
+    if (k && (!g.lastKey  || k > g.lastKey))  { g.lastKey  = k; g.lastDate  = r.sendDate; }
+    const pc = (r.invoiceId.split('-')[1] || '');
+    if (/^\d{4}$/.test(pc)) g.periods.add(pc);
     map[r.contract].debit  += r.debit;
     map[r.contract].credit += r.credit;
     if (hasExtra && r.name    && !map[r.contract].name)    map[r.contract].name    = r.name;
@@ -103,7 +109,12 @@ function parseCSV(text) {
   }
   summaryRows = Object.values(map)
     .sort((a, b) => a.contract.localeCompare(b.contract))
-    .map(r => ({ ...r, balance: Math.round((r.debit - r.credit) * 100) / 100 }));
+    .map(r => {
+      const ps = [...r.periods].sort();
+      const periodKey = ps[0] || '';
+      const period = ps.length ? (ps.length > 1 ? fmtPeriod(ps[0]) + ' – ' + fmtPeriod(ps[ps.length - 1]) : fmtPeriod(ps[0])) : '';
+      return { ...r, periods: undefined, periodKey, period, balance: Math.round((r.debit - r.credit) * 100) / 100 };
+    });
 
   singleContract = summaryRows.length === 1;
   billingRows = singleContract ? buildBillingRows() : [];
@@ -126,6 +137,12 @@ function describeInvoice(invoiceId) {
   }
   const typeLabel = TYPE_LABELS[parts[2]] || parts[2];
   return monthLabel ? (typeLabel + ' ' + monthLabel) : typeLabel;
+}
+
+// Period code from the invoice ID, e.g. "2609" -> "09/2026"
+function fmtPeriod(code) {
+  const m = (code || '').match(/^(\d{2})(\d{2})$/);
+  return m ? m[2] + '/20' + m[1] : code || '';
 }
 
 // Convert "DD.MM.YYYY" -> "YYYYMMDD" for chronological sorting; '' if not matching.
@@ -322,6 +339,9 @@ function renderSummary() {
       { key: 'malo',    label: 'MaLo' },
       { key: 'address', label: 'Address' },
     ] : []),
+    { key: 'periodKey', label: 'Billing Period' },
+    { key: 'firstKey',  label: 'First Invoice' },
+    { key: 'lastKey',   label: 'Last Invoice' },
     { key: 'debit',   label: 'Total Debit',  num: true },
     { key: 'credit',  label: 'Total Credit', num: true },
     { key: 'balance', label: 'Balance',       num: true },
@@ -346,6 +366,9 @@ function renderSummary() {
       row += "<td>" + (r.malo || '') + "</td>";
       row += "<td class='td-address'>" + (r.address || '') + "</td>";
     }
+    row += "<td>" + (r.period || '') + "</td>";
+    row += "<td>" + (r.firstDate || '') + "</td>";
+    row += "<td>" + (r.lastDate || '') + "</td>";
     row += "<td class='num'>" + fmt(r.debit) + "</td>";
     row += "<td class='num'>" + fmt(r.credit) + "</td>";
     row += "<td class='num " + cls + "'>" + fmt(r.balance) + "</td></tr>";
@@ -354,6 +377,7 @@ function renderSummary() {
 
   let tfoot = "<tr><td>TOTAL</td>";
   if (hasExtra) tfoot += "<td></td><td></td><td></td><td></td>";
+  tfoot += "<td></td><td></td><td></td>";
   tfoot += "<td class='num'>" + fmt(tD) + "</td><td class='num'>" + fmt(tC) + "</td><td class='num'>" + fmt(tB) + "</td></tr>";
 
   document.getElementById('summaryTable').innerHTML =
@@ -423,24 +447,24 @@ function exportExcel() {
 
   const s1h = ['Contract Number'];
   if (hasExtra) s1h.push('Partner Name', 'Meter Number', 'MaLo', 'Address');
-  s1h.push('Total Debit', 'Total Credit', 'Balance');
+  s1h.push('Billing Period', 'First Invoice', 'Last Invoice', 'Total Debit', 'Total Credit', 'Balance');
   const s1 = [s1h];
   let tD = 0, tC = 0;
   for (const r of summaryRows) {
     const row = [r.contract];
     if (hasExtra) row.push(r.name, r.meter, r.malo, r.address);
-    row.push(r.debit, r.credit, r.balance);
+    row.push(r.period, r.firstDate, r.lastDate, r.debit, r.credit, r.balance);
     s1.push(row);
     tD += r.debit; tC += r.credit;
   }
   const totRow = ['TOTAL'];
   if (hasExtra) totRow.push('', '', '', '');
-  totRow.push(tD, tC, tD - tC);
+  totRow.push('', '', '', tD, tC, tD - tC);
   s1.push(totRow);
   const ws1 = XLSX.utils.aoa_to_sheet(s1);
   ws1['!cols'] = hasExtra
-    ? [{wch:16},{wch:20},{wch:16},{wch:14},{wch:30},{wch:14},{wch:14},{wch:14}]
-    : [{wch:16},{wch:14},{wch:14},{wch:14}];
+    ? [{wch:16},{wch:20},{wch:16},{wch:14},{wch:30},{wch:18},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14}]
+    : [{wch:16},{wch:18},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14}];
 
   const s2h = ['Step', 'Transaction', 'Debit', 'Credit', 'Running Balance', 'Contract Number'];
   if (hasExtra) s2h.push('Partner Name', 'IBAN (masked)', 'Meter Number', 'MaLo', 'Address');
